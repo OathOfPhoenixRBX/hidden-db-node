@@ -1,3 +1,4 @@
+// RENDER NODE: scripts/community-scanner-sister.js
 const axios = require('axios');
 
 class RateLimitError extends Error {
@@ -8,7 +9,7 @@ class RateLimitError extends Error {
 }
 
 const axiosInstance = axios.create({
-  timeout: 4000,
+  timeout: 6000, // Explicit timeout for Roblox API calls
   httpAgent: new (require('http').Agent)({ keepAlive: true }),
   httpsAgent: new (require('https').Agent)({ keepAlive: true })
 });
@@ -21,12 +22,15 @@ async function getDatabase(dbWorkerUrl) {
     const now = Date.now();
     if (cachedDb && (now - lastDbFetch < CACHE_TTL)) return cachedDb;
     try {
-        // Securely fetch DB from Cloudflare Worker
-        const res = await axios.post(dbWorkerUrl, { fetchFull: true }, { timeout: 10000 });
+        // SECURE FETCH: Added explicit 15s timeout so it never hangs indefinitely
+        const res = await axios.post(dbWorkerUrl, { fetchFull: true }, { timeout: 15000 });
+        
+        // Maps the lowercase 'userid' from Supabase to camelCase 'userId'
         cachedDb = res.data.map(u => ({ userId: u.userid, tier: u.tier, riskscore: u.riskscore }));
         lastDbFetch = now;
         return cachedDb;
     } catch (e) {
+        console.error("Worker fetch failed:", e.message);
         throw new Error('Failed to fetch database from worker.');
     }
 }
@@ -59,21 +63,21 @@ async function isUserInGroup(userId, targetGroupId) {
   }
 }
 
-// FIXED: Renamed to checkSisterCommunityScan to match server.js
 async function checkSisterCommunityScan(payload, dbWorkerUrl) {
   const { groupId, offset = 0, limit = 10, isInitialCall = false } = payload;
   try {
     const dbUsers = await getDatabase(dbWorkerUrl);
 
-    // Phase 1: Return total count to the frontend so it knows how many batches to run
+    // PHASE 1: Return ONLY the total count. The DB array is kept entirely hidden.
     if (isInitialCall) return { status: 'initial', totalCount: dbUsers.length };
 
-    // Phase 2: Process only the specific 10-user chunk
+    // PHASE 2: Process the specific 10-user chunk
     const chunk = dbUsers.slice(offset, offset + limit);
     const matchedUsers = [];
     let scannedCount = 0;
 
-    await asyncPool(10, chunk, async (user) => {
+    // CONCURRENCY CAP: Lowered to 3 to dramatically reduce Roblox rate limits
+    await asyncPool(3, chunk, async (user) => {
       scannedCount++;
       try {
         const isInGroup = await isUserInGroup(user.userId, groupId);
@@ -86,12 +90,11 @@ async function checkSisterCommunityScan(payload, dbWorkerUrl) {
     return { status: 'completed', matchedUsers, scannedInBatch: scannedCount };
   } catch (error) {
     if (error instanceof RateLimitError) {
-      // Bubble up the rate limit so frontend can pause for 5 seconds
+      // Bubbles up to frontend to trigger the infinite 5-second backoff loop (No skips)
       return { status: 'rate_limited', message: 'API rate limit reached.', matchedUsers: [], scannedInBatch: 0 };
     }
-    return { status: 'error', message: 'An unexpected error occurred.' };
+    return { status: 'error', message: 'An unexpected error occurred processing chunk.' };
   }
 }
 
-// FIXED: Exporting the correct name
 module.exports = { checkSisterCommunityScan };
