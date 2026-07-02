@@ -21,6 +21,7 @@ let lastDbFetch = 0;
 const CACHE_TTL = 10 * 60 * 1000; // Cache the DB for 10 minutes to save requests
 
 // Replace the existing getFullDatabase function with this:
+// Add 'async' right here before 'function'
 async function getFullDatabase(dbWorkerUrl) {
   const now = Date.now();
   if (cachedDb && (now - lastDbFetch < CACHE_TTL)) {
@@ -28,20 +29,9 @@ async function getFullDatabase(dbWorkerUrl) {
   }
   
   try {
-    // FIX: Send a POST request with fetchFull to bypass the Worker's ID check
+    // This MUST be a POST request to bypass the Worker's ID check
     const res = await axios.post(dbWorkerUrl, { fetchFull: true });
-    cachedDb = res.data.map(u => ({ userId: u.userid, tier: u.tier, riskscore: u.riskscore }));
-    lastDbFetch = now;
-    return cachedDb;
-  } catch (e) {
-    console.error("Failed to fetch DB from worker:", e.message);
-    throw new Error('Database fetch failed');
-  }
-}
-  
-  try {
-    // The Render node securely pulls the DB from your Cloudflare worker
-    const res = await axios.get(dbWorkerUrl);
+    
     cachedDb = res.data.map(u => ({ userId: u.userid, tier: u.tier, riskscore: u.riskscore }));
     lastDbFetch = now;
     return cachedDb;
