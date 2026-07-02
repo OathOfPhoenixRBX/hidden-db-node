@@ -22,7 +22,7 @@ async function getDatabase(dbWorkerUrl) {
     if (cachedDb && (now - lastDbFetch < CACHE_TTL)) return cachedDb;
     try {
         // Securely fetch DB from Cloudflare Worker
-        const res = await axios.post(dbWorkerUrl, { fetchFull: true });
+        const res = await axios.post(dbWorkerUrl, { fetchFull: true }, { timeout: 10000 });
         cachedDb = res.data.map(u => ({ userId: u.userid, tier: u.tier, riskscore: u.riskscore }));
         lastDbFetch = now;
         return cachedDb;
