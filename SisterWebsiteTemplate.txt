@@ -1,0 +1,15 @@
+What happens on the Distributed Sister Website?
+
+The code you hand out to the other community is beautifully simple and completely secure. All they need to do is hit your Render node. Their server doesn't do any math, doesn't handle Roblox API limits, and doesn't know who is in the master database.
+
+Their server.js route just looks like this:
+
+```app.post('/run-community-scan', async (req, res) => {
+    try {
+        // They send their payload to your private server
+        const proxyRes = await axios.post("https://YOUR-RENDER-URL.onrender.com/run-community-scan", req.body);
+        res.json(proxyRes.data);
+    } catch (error) {
+        res.status(500).json({ error: 'Scan failed.' });
+    }
+});```
