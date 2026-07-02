@@ -1,4 +1,3 @@
-// CENTRAL RENDER VAULT: scripts/community-scanner-sister.js
 const axios = require('axios');
 
 class RateLimitError extends Error {
@@ -9,7 +8,7 @@ class RateLimitError extends Error {
 }
 
 const axiosInstance = axios.create({
-  timeout: 8000,
+  timeout: 10000,
   httpAgent: new (require('http').Agent)({ keepAlive: true }),
   httpsAgent: new (require('https').Agent)({ keepAlive: true })
 });
@@ -54,10 +53,10 @@ async function getUserThumbnails(userIds) {
     return thumbMap;
 }
 
-// Check Group via Proxy to avoid Render IP Bans
+// Direct Roblox API Check
 async function isUserInGroup(userId, targetGroupId) {
   try {
-    const response = await axiosInstance.get(`https://groups.roproxy.com/v1/users/${userId}/groups/roles`);
+    const response = await axiosInstance.get(`https://groups.roblox.com/v1/users/${userId}/groups/roles`);
     return response.data.data.some(g => g.group.id === parseInt(targetGroupId));
   } catch (error) {
     if (error.response?.status === 429) throw new RateLimitError('Rate limit hit');
@@ -72,7 +71,7 @@ async function checkSisterCommunityScan(payload, dbWorkerUrl) {
   try {
     const dbUsers = await getDatabase(dbWorkerUrl);
 
-    // Phase 1: Tell frontend how many users exist (DB stays completely hidden)
+    // Phase 1: Tell frontend how many users exist (DB stays perfectly hidden)
     if (isInitialCall) return { status: 'initial', totalCount: dbUsers.length };
 
     // Phase 2: Process the requested 10-user chunk
@@ -80,18 +79,21 @@ async function checkSisterCommunityScan(payload, dbWorkerUrl) {
     const matchedUsers = [];
     let scannedCount = 0;
 
-    // Sequential loop guarantees stability and prevents rate-limit floods
+    // Sequential loop with 100ms breather guarantees stability and prevents 429 floods
     for (const user of chunk) {
       scannedCount++;
       try {
         const isInGroup = await isUserInGroup(user.userId, groupId);
         if (isInGroup) matchedUsers.push({ ...user });
+        
+        // Tiny breather to protect Render Node IPs from aggressive Roblox limits
+        await new Promise(r => setTimeout(r, 100)); 
       } catch (e) {
         if (e instanceof RateLimitError) throw e;
       }
     }
 
-    // Hydrate matches completely on the Render side
+    // Hydrate matches directly on the Render Vault before sending them back
     if (matchedUsers.length > 0) {
       const matchedIds = matchedUsers.map(u => u.userId);
       const [nameMap, thumbMap] = await Promise.all([
