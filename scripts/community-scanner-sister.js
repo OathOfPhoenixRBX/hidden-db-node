@@ -59,7 +59,8 @@ async function isUserInGroup(userId, targetGroupId) {
   }
 }
 
-async function checkCommunityScanner(payload, dbWorkerUrl) {
+// FIXED: Renamed to checkSisterCommunityScan to match server.js
+async function checkSisterCommunityScan(payload, dbWorkerUrl) {
   const { groupId, offset = 0, limit = 10, isInitialCall = false } = payload;
   try {
     const dbUsers = await getDatabase(dbWorkerUrl);
@@ -92,4 +93,5 @@ async function checkCommunityScanner(payload, dbWorkerUrl) {
   }
 }
 
-module.exports = { checkCommunityScanner };
+// FIXED: Exporting the correct name
+module.exports = { checkSisterCommunityScan };
